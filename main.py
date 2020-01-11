@@ -1,79 +1,19 @@
 from collections import OrderedDict
 import numpy as np
 import cv2
-
-# define a dictionary that maps the indexes of the facial
-# landmarks to specific face regions
-FACIAL_LANDMARKS_IDXS = OrderedDict([
-	("mouth", (48, 68)),
-	("right_eyebrow", (17, 22)),
-	("left_eyebrow", (22, 27)),
-	("right_eye", (36, 42)),
-	("left_eye", (42, 48)),
-	("nose", (27, 36)),
-	("jaw", (0, 17))
-])
-
-def rect_to_bb(rect):
-	# take a bounding predicted by dlib and convert it
-	# to the format (x, y, w, h) as we would normally do
-	# with OpenCV
-	x = rect.left()
-	y = rect.top()
-	w = rect.right() - x
-	h = rect.bottom() - y
-
-	# return a tuple of (x, y, w, h)
-	return (x, y, w, h)
-
-def shape_to_np(shape, dtype="int"):
-	# initialize the list of (x, y)-coordinates
-	coords = np.zeros((68, 2), dtype=dtype)
- 
-	# loop over the 68 facial landmarks and convert them
-	# to a 2-tuple of (x, y)-coordinates
-	for i in range(0, 68):
-		coords[i] = (shape.part(i).x, shape.part(i).y)
- 
-	# return the list of (x, y)-coordinates
-	return coords
-
-# import the necessary packages
-#from imutils import face_utils
-import numpy as np
 import argparse
-import dlib
-import cv2
+from utils.preprocess import preprocess_image
  
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--shape-predictor", required=True,
-	help="path to facial landmark predictor")
 ap.add_argument("-i", "--image", required=True,
 	help="path to input image")
 args = vars(ap.parse_args())
 
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor(args["shape_predictor"])
+image, landmarks, bbox = preprocess_image(args['image'])
 
-
-image = cv2.imread(args["image"])
-#image = imutils.resize(image, width=500)
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
- 
-# detect faces in the grayscale image
-rects = detector(gray, 1)
-
-for (i, rect) in enumerate(rects):
-	# determine the facial landmarks for the face region, then
-	# convert the facial landmark (x, y)-coordinates to a NumPy
-	# array
-    shape = predictor(gray, rect)
-    shape = shape_to_np(shape)
-
-    # convert dlib's rectangle to a OpenCV-style bounding box
-    # [i.e., (x, y, w, h)], then draw the face bounding box
-    (x, y, w, h) = rect_to_bb(rect)
+for i, single_landmark in enumerate(landmarks):
+    (x,y,w,h) = bbox[i]
     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
     # show the face number
@@ -82,7 +22,7 @@ for (i, rect) in enumerate(rects):
 
     # loop over the (x, y)-coordinates for the facial landmarks
     # and draw them on the image
-    for (x, y) in shape:
+    for (x, y) in landmarks[i]:
         cv2.circle(image, (x, y), 1, (0, 0, 255), -1)
  
 # show the output image with the face detections + facial landmarks
