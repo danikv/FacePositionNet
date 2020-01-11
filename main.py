@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import argparse
 from utils.preprocess import preprocess_image
+from utils.model_loader import ModelLoader
  
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -10,7 +11,9 @@ ap.add_argument("-i", "--image", required=True,
 	help="path to input image")
 args = vars(ap.parse_args())
 
-image, landmarks, bbox = preprocess_image(args['image'])
+model_loader = ModelLoader('model/model3D.mat', 'model/shape_predictor_68_face_landmarks.dat')
+
+image, landmarks, bbox = preprocess_image(args['image'], model_loader)
 
 for i, single_landmark in enumerate(landmarks):
     (x,y,w,h) = bbox[i]
