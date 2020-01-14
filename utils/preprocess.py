@@ -77,7 +77,7 @@ def convert_data_to_dict(tvec, pose_angle, image_path):
     return record
 
 def flip_image(image):
-    return np.flip(image, 1)
+    return cv2.flip(image, 1)
 
 def flip_landmarks(image, landmarks):
     _, width = image.shape[:2]
