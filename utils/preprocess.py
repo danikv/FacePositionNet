@@ -1,10 +1,26 @@
 from utils.camera_calibration import estimate_camera, matrix2angle
+from lxml import objectify
 from math import cos, sin, radians
 import pandas as pd
 import numpy as np
 import glob
 import cv2
 import os
+
+
+image_number = 0
+
+def crop(image, bbox):
+    height, width = image.shape[:2]
+    new_height = int(height / 8)
+    new_width = int(width / 8)
+    return image[max(0, bbox[2] - new_height) : min(bbox[3] + new_height, height - 1), max(0 , bbox[0] - new_width) : min(bbox[1] + new_width, width - 1)]
+
+def read_bbox_from_file(file_path):
+    xml_file = open(file_path, "r")
+    root = objectify.fromstring(str(xml_file.read()))
+    bbox = root['object']['bndbox']
+    return (bbox['xmin'], bbox['xmax'], bbox['ymin'], bbox['ymax'])
 
 def rotate_and_scale_image(image, angle, scale):
     (h, w) = image.shape[:2]
@@ -36,33 +52,18 @@ def _shape_to_np(shape):
     # return the list of (x, y)-coordinates
     return coords
 
-
-def rect_to_bb(rect):
-  # take a bounding predicted by dlib and convert it
-  # to the format (x, y, w, h) as we would normally do
-  # with OpenCV
-  x = rect.left()
-  y = rect.top()
-  w = rect.right() - x
-  h = rect.bottom() - y
-
-  # return a tuple of (x, y, w, h)
-  return (x, y, w, h)
-
 def calculate_landmarks(img, model_loader):
     landmarks = []
     dets, scores, idx = model_loader.detector.run(img, 1)
     shapes = []
-    bboxes = []
     for k, det in enumerate(dets):
         shape = model_loader.predictor(img, det)
         shapes.append(shape)
         xy = _shape_to_np(shape)
-        bboxes.append(rect_to_bb(det))
         landmarks.append(xy)
 
     landmarks = np.asarray(landmarks, dtype='float32')
-    return landmarks, bboxes
+    return landmarks
 
 def convert_data_to_dict(tvec, pose_angle, image_path):
     record = {}
@@ -73,7 +74,6 @@ def convert_data_to_dict(tvec, pose_angle, image_path):
     record['tx'] = tvec[0][0]
     record['ty'] = tvec[1][0]
     record['tz'] = tvec[2][0]
-    print(record)
     return record
 
 def flip_image(image):
@@ -98,29 +98,47 @@ def random_scale():
     return np.random.uniform(0.75, 1.25)
 
 def random_rotation():
-    return 45 * np.random.normal(0, 1)
+    return 60 * np.random.normal(0, 1)
 
-def preprocess_image(image_path, model_loader):
+def calculate_record(image, image_path, model_loader, landmarks):
+    _, _, rmat, tvec = estimate_camera(model_loader.model3D, landmarks)
+    pose_angle = matrix2angle(rmat)
+    return convert_data_to_dict(tvec, pose_angle, image_path)
+
+def save_image(image_path, image):
+    global image_number
+    image_number += 1
+    new_image_path = os.path.join(image_path, str(image_number) + ".jpg")
+    cv2.imwrite(new_image_path, image)
+    return new_image_path
+
+def preprocess_image(new_path, image_path, annotation_file_path, model_loader):
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    landmarks, bbox = calculate_landmarks(img, model_loader)
+    if img is None:
+        return []
+    bbox = read_bbox_from_file(annotation_file_path)
+    img = crop(img, bbox)
+    landmarks = calculate_landmarks(img, model_loader)
     records = []
-    for i, single_landmark in enumerate(landmarks):        
-        image, traslation_matrix = translate_image(img, random_horizontal_translation(img), random_vertical_translation(img))
-        image, rotation_matrix = rotate_and_scale_image(img, random_rotation(), random_scale())
+    for i, single_landmark in enumerate(landmarks):
+        new_image_path = save_image(new_path, img)
+        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
+        img, traslation_matrix = translate_image(img, random_horizontal_translation(img), random_vertical_translation(img))
+        img, rotation_matrix = rotate_and_scale_image(img, random_rotation(), random_scale())
         single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, traslation_matrix)
         single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, rotation_matrix)
-        image = flip(image)
-        single_landmark = flip(landmarks)
-        proj_matrix, camera_matrix, rmat, tvec = estimate_camera(model_loader.model3D, single_landmark)
-        pose_angle = matrix2angle(rmat)
-        #create image rotations
-        records.append(convert_data_to_dict(tvec, pose_angle, image_path))
+        new_image_path = save_image(new_path, img)
+        records.append(calculate_record(img, image_path, model_loader, single_landmark))
+        img = flip_image(img)
+        single_landmark = flip_landmarks(img, single_landmark)
+        new_image_path = save_image(new_path, img)
+        records.append(calculate_record(img, image_path, model_loader, single_landmark))
     return records
 
-def preprocess_images(images_folder, model_loader):
+def preprocess_images(images_folder, new_dataset_path, model_loader):
     df = []
     for img in os.listdir(images_folder):
         if img.endswith(".jpg") or img.endswith(".png"):
-            for record in preprocess_image(os.path.join(images_folder, img), model_loader):
+            for record in preprocess_image(new_dataset_path , os.path.join(images_folder, img), os.path.join(images_folder, '..', 'labels', img.split('.')[0]+'.xml'), model_loader):
                 df.append(record)
     return pd.DataFrame(df)

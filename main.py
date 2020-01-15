@@ -11,23 +11,25 @@ ap.add_argument("-i", "--image", required=True,
 	help="path to input image")
 ap.add_argument("-o", "--output_csv", required=True,
 	help="path to output the csv")
+ap.add_argument("-of", "--output_folder", required=True,
+	help="path to output the csv")
 args = vars(ap.parse_args())
 
 model_loader = ModelLoader('model/model3D.mat', 'model/shape_predictor_68_face_landmarks.dat')
 
-#df = preprocess_images(args['image'], model_loader)
+df = preprocess_images(args['image'], args['output_folder'], model_loader)
 #np.savetxt('struct_array.csv', df, delimiter=',', header='file name,rx,ry,ry,tx,ty,tz')
 
-#df.to_csv(args['output_csv'])
+df.to_csv(args['output_csv'])
 
-img = cv2.imread(args['image'], cv2.IMREAD_COLOR)
+'''img = cv2.imread(args['image'], cv2.IMREAD_COLOR)
 landmarks, bbox = calculate_landmarks(img, model_loader)
 img, traslation_matrix = translate_image(img, 10, 20)
 img, rotation_matrix = rotate_and_scale_image(img, 15, 0.9)
-
+'''
 #image = np.flip(image, 1)
 #landmarks = np.flip(landmarks, 1)
-image = cv2.flip(img, 1)
+'''image = cv2.flip(img, 1)
 
 for i, landmark in enumerate(landmarks):
     landmark = calculate_landmarks_with_respect_to_matrix(landmark, traslation_matrix)
@@ -49,5 +51,5 @@ for i, landmark in enumerate(landmarks):
  
 # show the output image with the face detections + facial landmarks
 cv2.imshow("Output", image)
-cv2.waitKey(0)
+cv2.waitKey(0)'''
 
