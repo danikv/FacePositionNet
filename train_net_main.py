@@ -10,8 +10,8 @@ if __name__ == '__main__':
         help="path to input image")
     args = ap.parse_args()
 
-    images_train_datagen, images_validation_datagen = load_images(args.input_csv)
-    #= load_images(args.input_validation_csv)
+    images_train_datagen = load_images(args.input_csv)
+    images_validation_datagen = load_images(args.input_validation_csv)
 
     model = create_model()
 

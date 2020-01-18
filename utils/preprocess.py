@@ -10,14 +10,17 @@ import os
 image_number = 0
 
 def split_dataset(dataset):
-    msk = np.random.rand(len(dataset)) < 0.8
+    msk = np.random.rand(len(dataset)) < 0.65
     train = dataset[msk]
     validation = dataset[~msk]
     return train, validation
 
 def load_pts_file(pts_path):
-    with open(pts_path) as f:
-        rows = [rows.strip() for rows in f]
+    try :
+        with open(pts_path) as f:
+            rows = [rows.strip() for rows in f]
+    except OSError:
+        return None
     
     """Use the curly braces to find the start and end of the point data""" 
     head = rows.index('{') + 1
@@ -28,8 +31,8 @@ def load_pts_file(pts_path):
     coords_set = [point.split() for point in raw_points]
 
     """Convert entries from lists of strings to tuples of floats"""
-    points = [tuple([float(point) for point in coords]) for coords in coords_set]
-    return points
+    points = np.asarray([np.asarray([float(point) for point in coords]) for coords in coords_set])
+    return np.array([points])
 
 def crop(image, bbox):
     height, width = image.shape[:2]
@@ -119,7 +122,7 @@ def random_scale():
     return np.random.uniform(0.75, 1.25)
 
 def random_rotation():
-    return 40 * np.random.normal(0, 1)
+    return 30 * np.random.normal(0, 1)
 
 def calculate_record(image, image_path, model_loader, landmarks):
     _, _, rmat, tvec = estimate_camera(model_loader.model3D, landmarks)
@@ -153,7 +156,7 @@ def transform_landmarks(landmarks, new_path, img, model_loader):
 def preprocess_image(new_path, images_folder, image_name, model_loader):
     image_path = os.path.join(images_folder, image_name)
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    annotation_file_path = os.path.join(images_folder, '..', 'labels', img.split('.')[0]+'.xml')
+    annotation_file_path = os.path.join(images_folder, '..', 'labels', image_name.split('.')[0]+'.xml')
     if img is None:
         return []
     bbox = read_bbox_from_file(annotation_file_path)
@@ -164,10 +167,12 @@ def preprocess_image(new_path, images_folder, image_name, model_loader):
 def preprocess_validation_image(new_path, images_folder, image_name, model_loader):
     image_path = os.path.join(images_folder, image_name)
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    pts_file_path = image_path.split('.')[0] + '.pts'
+    pts_file_path = os.path.join(images_folder, image_name.split('.')[0] + '.pts')
     if img is None:
         return []
     landmarks = load_pts_file(pts_file_path)
+    if landmarks is None:
+        return []
     return transform_landmarks(landmarks, new_path, img, model_loader)
 
 def preprocess_images(images_folder, new_dataset_path, model_loader, process_function):

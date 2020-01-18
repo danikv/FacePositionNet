@@ -21,15 +21,15 @@ args = ap.parse_args()
 
 model_loader = ModelLoader('model/model3D.mat', 'model/shape_predictor_68_face_landmarks.dat')
 
+df_validation = preprocess_images(args.images_validation, args.output_folder, model_loader, preprocess_validation_image)
+
 df = preprocess_images(args.images, args.output_folder, model_loader, preprocess_image)
 
 train, validation = split_dataset(df)
 
-df_validation = preprocess_images(args.images_validation, args.output_folder, model_loader, preprocess_validation_image)
-
 train.to_csv(args.output_csv)
 
-df_validation.append(validation)
+df_validation = df_validation.append(validation)
 
 df_validation.to_csv(args.output_validation_csv)
 
