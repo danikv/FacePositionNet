@@ -7,7 +7,6 @@ import glob
 import cv2
 import os
 
-
 image_number = 0
 
 def crop(image, bbox):
@@ -98,7 +97,7 @@ def random_scale():
     return np.random.uniform(0.75, 1.25)
 
 def random_rotation():
-    return 60 * np.random.normal(0, 1)
+    return 40 * np.random.normal(0, 1)
 
 def calculate_record(image, image_path, model_loader, landmarks):
     _, _, rmat, tvec = estimate_camera(model_loader.model3D, landmarks)
@@ -128,11 +127,11 @@ def preprocess_image(new_path, image_path, annotation_file_path, model_loader):
         single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, traslation_matrix)
         single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, rotation_matrix)
         new_image_path = save_image(new_path, img)
-        records.append(calculate_record(img, image_path, model_loader, single_landmark))
+        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
         img = flip_image(img)
         single_landmark = flip_landmarks(img, single_landmark)
         new_image_path = save_image(new_path, img)
-        records.append(calculate_record(img, image_path, model_loader, single_landmark))
+        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
     return records
 
 def preprocess_images(images_folder, new_dataset_path, model_loader):

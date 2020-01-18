@@ -180,7 +180,6 @@ def matrix2angle(R):
 
     if R[2, 0] != 1 or R[2, 0] != -1:
         x = -asin(R[2, 0])
-        # x = np.pi - x
         y = atan2(R[2, 1] / cos(x), R[2, 2] / cos(x))
         z = atan2(R[1, 0] / cos(x), R[0, 0] / cos(x))
 
