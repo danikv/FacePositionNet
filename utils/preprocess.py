@@ -1,6 +1,6 @@
 from utils.camera_calibration import estimate_camera, matrix2angle
-from lxml import objectify
 from math import cos, sin, radians
+from lxml import objectify
 import pandas as pd
 import numpy as np
 import glob
@@ -8,6 +8,28 @@ import cv2
 import os
 
 image_number = 0
+
+def split_dataset(dataset):
+    msk = np.random.rand(len(dataset)) < 0.8
+    train = dataset[msk]
+    validation = dataset[~msk]
+    return train, validation
+
+def load_pts_file(pts_path):
+    with open(pts_path) as f:
+        rows = [rows.strip() for rows in f]
+    
+    """Use the curly braces to find the start and end of the point data""" 
+    head = rows.index('{') + 1
+    tail = rows.index('}')
+
+    """Select the point data split into coordinates"""
+    raw_points = rows[head:tail]
+    coords_set = [point.split() for point in raw_points]
+
+    """Convert entries from lists of strings to tuples of floats"""
+    points = [tuple([float(point) for point in coords]) for coords in coords_set]
+    return points
 
 def crop(image, bbox):
     height, width = image.shape[:2]
@@ -111,13 +133,7 @@ def save_image(image_path, image):
     cv2.imwrite(new_image_path, image)
     return new_image_path
 
-def preprocess_image(new_path, image_path, annotation_file_path, model_loader):
-    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    if img is None:
-        return []
-    bbox = read_bbox_from_file(annotation_file_path)
-    img = crop(img, bbox)
-    landmarks = calculate_landmarks(img, model_loader)
+def transform_landmarks(landmarks, new_path, img, model_loader):
     records = []
     for i, single_landmark in enumerate(landmarks):
         new_image_path = save_image(new_path, img)
@@ -134,10 +150,30 @@ def preprocess_image(new_path, image_path, annotation_file_path, model_loader):
         records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
     return records
 
-def preprocess_images(images_folder, new_dataset_path, model_loader):
+def preprocess_image(new_path, images_folder, image_name, model_loader):
+    image_path = os.path.join(images_folder, image_name)
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    annotation_file_path = os.path.join(images_folder, '..', 'labels', img.split('.')[0]+'.xml')
+    if img is None:
+        return []
+    bbox = read_bbox_from_file(annotation_file_path)
+    img = crop(img, bbox)
+    landmarks = calculate_landmarks(img, model_loader)
+    return transform_landmarks(landmarks, new_path, img, model_loader)
+
+def preprocess_validation_image(new_path, images_folder, image_name, model_loader):
+    image_path = os.path.join(images_folder, image_name)
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    pts_file_path = image_path.split('.')[0] + '.pts'
+    if img is None:
+        return []
+    landmarks = load_pts_file(pts_file_path)
+    return transform_landmarks(landmarks, new_path, img, model_loader)
+
+def preprocess_images(images_folder, new_dataset_path, model_loader, process_function):
     df = []
     for img in os.listdir(images_folder):
         if img.endswith(".jpg") or img.endswith(".png"):
-            for record in preprocess_image(new_dataset_path , os.path.join(images_folder, img), os.path.join(images_folder, '..', 'labels', img.split('.')[0]+'.xml'), model_loader):
+            for record in process_function(new_dataset_path , images_folder, img, model_loader):
                 df.append(record)
     return pd.DataFrame(df)
