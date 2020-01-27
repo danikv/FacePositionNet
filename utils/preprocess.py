@@ -38,7 +38,8 @@ def crop(image, bbox):
     height, width = image.shape[:2]
     new_height = int(height / 8)
     new_width = int(width / 8)
-    return image[max(0, bbox[2] - new_height) : min(bbox[3] + new_height, height - 1), max(0 , bbox[0] - new_width) : min(bbox[1] + new_width, width - 1)]
+    rotation = (max(0 , bbox[0] - new_width), max(0, bbox[2] - new_height))
+    return rotation, image[max(0, bbox[2] - new_height) : min(bbox[3] + new_height, height), max(0 , bbox[0] - new_width) : min(bbox[1] + new_width, width)]
 
 def read_bbox_from_file(file_path):
     xml_file = open(file_path, "r")
@@ -89,6 +90,18 @@ def calculate_landmarks(img, model_loader):
     landmarks = np.asarray(landmarks, dtype='float32')
     return landmarks
 
+def calculate_new_landmark_with_rotation(landmark, rotation):
+    coords = []
+    for x,y in landmark:
+        coords.append((x + rotation[0], y + rotation[1]))
+    return np.asarray(coords, dtype='float32')
+
+def rotate_landmarks_before_crop(landmarks, rotation):
+    new_landmarks = []
+    for landmark in landmarks:
+        new_landmarks.append(calculate_new_landmark_with_rotation(landmark, rotation))
+    return np.asarray(new_landmarks, dtype='float32')
+
 def convert_data_to_dict(tvec, pose_angle, image_path):
     record = {}
     record['file name'] = image_path
@@ -138,19 +151,21 @@ def save_image(image_path, image):
 
 def transform_landmarks(landmarks, new_path, img, model_loader):
     records = []
-    for i, single_landmark in enumerate(landmarks):
-        new_image_path = save_image(new_path, img)
-        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
-        img, traslation_matrix = translate_image(img, random_horizontal_translation(img), random_vertical_translation(img))
-        img, rotation_matrix = rotate_and_scale_image(img, random_rotation(), random_scale())
-        single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, traslation_matrix)
-        single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, rotation_matrix)
-        new_image_path = save_image(new_path, img)
-        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
-        img = flip_image(img)
-        single_landmark = flip_landmarks(img, single_landmark)
-        new_image_path = save_image(new_path, img)
-        records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
+    if len(landmarks) <= 0:
+        return records
+    single_landmark = landmarks[0]
+    new_image_path = save_image(new_path, img)
+    records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
+    img, traslation_matrix = translate_image(img, random_horizontal_translation(img), random_vertical_translation(img))
+    img, rotation_matrix = rotate_and_scale_image(img, random_rotation(), random_scale())
+    single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, traslation_matrix)
+    single_landmark = calculate_landmarks_with_respect_to_matrix(single_landmark, rotation_matrix)
+    new_image_path = save_image(new_path, img)
+    records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
+    img = flip_image(img)
+    single_landmark = flip_landmarks(img, single_landmark)
+    new_image_path = save_image(new_path, img)
+    records.append(calculate_record(img, new_image_path, model_loader, single_landmark))
     return records
 
 def preprocess_image(new_path, images_folder, image_name, model_loader):
@@ -160,8 +175,9 @@ def preprocess_image(new_path, images_folder, image_name, model_loader):
     if img is None:
         return []
     bbox = read_bbox_from_file(annotation_file_path)
-    img = crop(img, bbox)
-    landmarks = calculate_landmarks(img, model_loader)
+    rotation, cropped_img = crop(img, bbox)
+    landmarks = calculate_landmarks(cropped_img, model_loader)
+    landmarks = rotate_landmarks_before_crop(landmarks, rotation)
     return transform_landmarks(landmarks, new_path, img, model_loader)
 
 def preprocess_validation_image(new_path, images_folder, image_name, model_loader):
