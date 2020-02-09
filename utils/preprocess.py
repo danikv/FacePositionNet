@@ -1,4 +1,5 @@
 from utils.camera_calibration import estimate_camera, matrix2angle
+from scipy.spatial.transform import Rotation as R
 from math import cos, sin, radians
 from lxml import objectify
 import pandas as pd
@@ -10,7 +11,7 @@ import os
 image_number = 0
 
 def split_dataset(dataset):
-    msk = np.random.rand(len(dataset)) < 0.65
+    msk = np.random.rand(len(dataset)) < 0.7
     train = dataset[msk]
     validation = dataset[~msk]
     return train, validation
@@ -104,10 +105,11 @@ def rotate_landmarks_before_crop(landmarks, rotation):
 
 def convert_data_to_dict(tvec, pose_angle, image_path):
     record = {}
+    rot_vec = R.from_euler('xyz', pose_angle).as_rotvec()
     record['file name'] = image_path
-    record['rx'] = pose_angle[0]
-    record['ry'] = pose_angle[1]
-    record['rz'] = pose_angle[2]
+    record['rx'] = rot_vec[0]
+    record['ry'] = rot_vec[1]
+    record['rz'] = rot_vec[2]
     record['tx'] = tvec[0][0]
     record['ty'] = tvec[1][0]
     record['tz'] = tvec[2][0]
@@ -148,6 +150,12 @@ def save_image(image_path, image):
     new_image_path = os.path.join(image_path, str(image_number) + ".jpg")
     cv2.imwrite(new_image_path, image)
     return new_image_path
+
+def show_image_and_landmarks(image, landmarks):
+    for (x, y) in landmarks:
+        cv2.circle(image, (int(x), int(y)), 1, (0, 0, 255), -1)
+    cv2.imshow("Output", image)
+    cv2.waitKey(0)
 
 def transform_landmarks(landmarks, new_path, img, model_loader):
     records = []
@@ -193,8 +201,12 @@ def preprocess_validation_image(new_path, images_folder, image_name, model_loade
 
 def preprocess_images(images_folder, new_dataset_path, model_loader, process_function):
     df = []
+    i = 0
     for img in os.listdir(images_folder):
+        if i == 50000:
+            return pd.DataFrame(df)
         if img.endswith(".jpg") or img.endswith(".png"):
+            i += 1
             for record in process_function(new_dataset_path , images_folder, img, model_loader):
                 df.append(record)
     return pd.DataFrame(df)
