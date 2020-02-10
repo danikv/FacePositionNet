@@ -201,12 +201,8 @@ def preprocess_validation_image(new_path, images_folder, image_name, model_loade
 
 def preprocess_images(images_folder, new_dataset_path, model_loader, process_function):
     df = []
-    i = 0
     for img in os.listdir(images_folder):
-        if i == 50000:
-            return pd.DataFrame(df)
         if img.endswith(".jpg") or img.endswith(".png"):
-            i += 1
             for record in process_function(new_dataset_path , images_folder, img, model_loader):
                 df.append(record)
     return pd.DataFrame(df)
